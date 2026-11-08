@@ -1,0 +1,45 @@
+{
+  "name": "failure-atlas",
+  "version": "0.1.0",
+  "description": "A local-first agent failure lab: fault injection, deterministic replay, trace comparison, and regression bundles.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "author": "Gabriele Monni",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "failure-atlas": "dist/cli/fa.mjs"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run build:web && npm run build:cli",
+    "build:web": "vite build",
+    "build:cli": "esbuild src/cli/main.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/cli/fa.mjs --banner:js=\"#!/usr/bin/env node\"",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "fa": "tsx src/cli/main.ts",
+    "bench": "tsx bench/bench.ts",
+    "screenshots": "node scripts/screenshots.mjs"
+  },
+  "dependencies": {
+    "@fontsource/jetbrains-mono": "^5.1.1",
+    "@fontsource/martian-mono": "^5.1.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "esbuild": "^0.24.0",
+    "playwright": "^1.49.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.0",
+    "vitest": "^2.1.8"
+  }
+}
