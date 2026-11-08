@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-08T13:33:36.923Z",
+  "generatedAt": "2026-11-08T17:12:50.849Z",
   "results": [
     {
       "name": "reduced motion disables paced delivery",
@@ -50,6 +50,26 @@
       "name": "number keys switch panels",
       "ok": true,
       "detail": ""
+    },
+    {
+      "name": "verdict names the failing check",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "corrected policy run passes and is selected",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "corrected run opens the comparison against the failing run",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "panel splitter resizes with the keyboard",
+      "ok": true,
+      "detail": "38 -> 43"
     },
     {
       "name": "injected fault produces a new custom run",
