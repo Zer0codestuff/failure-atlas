@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { AssertionSummary, EvaluatedAssertion } from '../engine/assertions';
 import type { Comparison } from '../engine/compare';
 import { buildGraph } from '../engine/graph';
@@ -12,10 +12,11 @@ import { Inspector } from './components/Inspector';
 import { JsonView } from './components/JsonView';
 import { PolicyPanel } from './components/PolicyPanel';
 import { Timeline, type Mark } from './components/Timeline';
+import { Verdict } from './components/Verdict';
 import { EngineClient, EngineError } from './engine-client';
 import type { ExportPreview, ImportResult, RunResult } from './protocol';
 
-interface RunRecord {
+export interface RunRecord {
   key: string;
   label: string;
   scenarioId: string | null;
@@ -40,6 +41,10 @@ const PANELS: Array<{ id: Panel; label: string }> = [
   { id: 'export', label: 'Export' },
   { id: 'runs', label: 'Runs' },
 ];
+
+const SPLIT_KEY = 'failure-atlas.panel-split';
+const DEFAULT_SPLIT = 0.38;
+const clampSplit = (v: number) => Math.min(0.75, Math.max(0.2, Math.round(v * 100) / 100));
 
 const prefersReducedMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const params = new URLSearchParams(location.search);
@@ -77,6 +82,33 @@ export function App() {
   const activeRun = useRef<number | null>(null);
   const counter = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  const [split, setSplitRaw] = useState(() => {
+    const v = Number(typeof localStorage !== 'undefined' ? localStorage.getItem(SPLIT_KEY) : NaN);
+    return Number.isFinite(v) && v > 0 ? clampSplit(v) : DEFAULT_SPLIT;
+  });
+  const setSplit = useCallback((v: number | ((x: number) => number)) => {
+    setSplitRaw((old) => {
+      const next = clampSplit(typeof v === 'function' ? v(old) : v);
+      try { localStorage.setItem(SPLIT_KEY, String(next)); } catch { /* storage may be unavailable */ }
+      return next;
+    });
+  }, []);
+  const onSplitStart = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const main = mainRef.current;
+    if (!main || e.button !== 0) return;
+    e.preventDefault();
+    const el = e.currentTarget;
+    el.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => {
+      const r = main.getBoundingClientRect();
+      setSplit((r.bottom - ev.clientY) / r.height);
+    };
+    const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); };
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+  };
 
   const current = runs.find((r) => r.key === currentKey) ?? null;
   const baseline = runs.find((r) => r.key === baselineKey) ?? null;
@@ -128,6 +160,19 @@ export function App() {
   );
 
   const runCurrent = useCallback(() => execute({ scenarioId: scenario.id, policy, plan }), [execute, scenario.id, policy, plan]);
+
+  // Guided fix: rerun the same faults with the scenario's corrected policy, keep the
+  // failing run as the comparison baseline, and open the comparison.
+  const runCorrected = useCallback(async () => {
+    const corrected = scenario.policies.find((p) => p.id === 'corrected');
+    if (!corrected || !current) return;
+    const faults = current.trace.faultPlan ?? null;
+    const failingKey = current.key;
+    setCustomPolicy(null);
+    setPolicyId('corrected');
+    const key = await execute({ scenarioId: scenario.id, policy: corrected, plan: faults });
+    if (key) { setBaselineKey(failingKey); setPanel('compare'); }
+  }, [scenario, current, execute]);
 
   // Open directly into a working example: the faulty run under the first fault preset,
   // with the corrected policy under the same faults as comparison baseline.
@@ -275,26 +320,14 @@ export function App() {
   return (
     <div className={`app mv-${mobileView}`}>
       <header className="topbar">
-        <button className="btn ghost rail-toggle" aria-expanded={railOpen} onClick={() => setRailOpen(!railOpen)}>[=] scenarios</button>
+        <button className="btn ghost rail-toggle" aria-expanded={railOpen} onClick={() => setRailOpen(!railOpen)} aria-label="Scenarios">[=]<span className="rail-toggle-text"> scenarios</span></button>
         <h1 className="brand">FAILURE ATLAS</h1>
         <span className={`mode mode-${mode}`} title={current?.trace.capabilities.reasons.join(' ') ?? ''}>
-          {mode === 'simulation' ? 'SIMULATION · fixtures · virtual time · reproducible' : mode === 'playback' ? 'PLAYBACK · recorded · not re-executable' : 'LIVE RECORDING · not reproducible'}
+          {mode === 'simulation' ? 'SIMULATION' : mode === 'playback' ? 'PLAYBACK' : 'LIVE RECORDING'}<span className="mode-detail">{mode === 'simulation' ? ' \u00b7 fixtures \u00b7 virtual time \u00b7 reproducible' : mode === 'playback' ? ' \u00b7 recorded \u00b7 not re-executable' : ' \u00b7 not reproducible'}</span>
         </span>
-        <div className="controls">
-          <label className="sr-only" htmlFor="sel-policy">Policy</label>
-          <select id="sel-policy" className="input" value={customPolicy ? 'custom' : policyId} onChange={(e) => { setCustomPolicy(null); setPolicyId(e.target.value); }}>
-            {scenario.policies.map((p) => <option key={p.id} value={p.id}>policy: {p.label}</option>)}
-            {customPolicy && <option value="custom">policy: {customPolicy.label}</option>}
-          </select>
-          <label className="sr-only" htmlFor="sel-faults">Fault plan</label>
-          <select id="sel-faults" className="input" value={presetId} onChange={(e) => { setCustomPlan(null); setPresetId(e.target.value); }}>
-            <option value="none">faults: none</option>
-            {scenario.faultPresets.map((f) => <option key={f.id} value={f.id}>faults: {f.title}</option>)}
-            {customPlan && <option value="custom">faults: {customPlan.title}</option>}
-          </select>
-          <button className="btn primary" onClick={() => void runCurrent()} disabled={busy} title="Run (r)">{busy ? 'running…' : '> run'}</button>
+        <div className="top-actions">
           <label className="inline small" title="Deliver recorded events gradually so they can be watched. Off when reduced motion is requested."><input type="checkbox" checked={paced} onChange={(e) => setPaced(e.target.checked)} /> paced</label>
-          <button className="btn ghost" onClick={() => fileInput.current?.click()}>import</button>
+          <button className="btn ghost" onClick={() => fileInput.current?.click()} title="Import a trace, bundle or OTLP/JSON file (or drop it on the page)">import</button>
           <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void onImportFile(f); e.target.value = ''; }} />
         </div>
       </header>
@@ -322,18 +355,38 @@ export function App() {
         <p className="rail-foot small muted">All scenarios are synthetic and run on local fixtures. Keys: r run · / search · t timeline · j/k move · 1-7 panels.</p>
       </nav>
 
-      <main className="main">
+      <main className="main" ref={mainRef} style={{ ['--panel-h' as string]: `${Math.round(split * 100)}%` }}>
         <div className="scenario-head">
-          <div>
+          <div className="scen-text">
             <h2 className="scen-title">{scenario.title}</h2>
             <p className="scen-sum">{scenario.summary}</p>
           </div>
-          {current && (
-            <p className="run-line small">
-              <span className="mono">{current.trace.id}</span> · status <strong>{current.trace.status}</strong> · {current.trace.events.length} events · {current.label}
-              {current.trace.parentRunId && <> · forked from <span className="mono">{current.trace.parentRunId}</span></>}
-            </p>
-          )}
+          <div className="controls" role="group" aria-label="Run configuration">
+            <label className="field" htmlFor="sel-policy"><span className="field-label">policy</span>
+              <select id="sel-policy" className="input" value={customPolicy ? 'custom' : policyId} onChange={(e) => { setCustomPolicy(null); setPolicyId(e.target.value); }}>
+                {scenario.policies.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                {customPolicy && <option value="custom">{customPolicy.label}</option>}
+              </select>
+            </label>
+            <label className="field" htmlFor="sel-faults"><span className="field-label">faults</span>
+              <select id="sel-faults" className="input" value={presetId} onChange={(e) => { setCustomPlan(null); setPresetId(e.target.value); }}>
+                <option value="none">none</option>
+                {scenario.faultPresets.map((f) => <option key={f.id} value={f.id}>{f.title}</option>)}
+                {customPlan && <option value="custom">{customPlan.title}</option>}
+              </select>
+            </label>
+            <button className="btn primary run-btn" onClick={() => void runCurrent()} disabled={busy} title="Run (r)">{busy ? 'running\u2026' : '> run'}</button>
+          </div>
+          <Verdict
+            current={busy ? null : current}
+            busy={busy}
+            streamed={streaming?.length ?? 0}
+            baseline={baseline}
+            correctedAvailable={scenario.policies.some((p) => p.id === 'corrected')}
+            onEvidence={selectEvent}
+            onRunCorrected={runCorrected}
+            onCompare={() => { setPanel('compare'); setMobileView('panel'); }}
+          />
         </div>
         <div className="mobile-tabs" role="tablist" aria-label="Views">
           {(['timeline', 'inspector', 'panel'] as MobileView[]).map((v) => (
@@ -356,6 +409,25 @@ export function App() {
             <Inspector trace={current && !busy ? current.trace : null} event={busy ? null : selectedEvent} scenario={current?.scenarioId ? getScenario(current.scenarioId)?.scenario ?? null : null} assertions={current?.assertions ?? []} onSelect={setSelectedSeq} onInjectFault={onInjectFault} onFork={onFork} busy={busy} onBack={() => setMobileView('timeline')} />
           </div>
         </div>
+        <div
+          className="splitter"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Resize the analysis panels"
+          aria-valuemin={20}
+          aria-valuemax={75}
+          aria-valuenow={Math.round(split * 100)}
+          tabIndex={0}
+          title="Drag, or use the arrow keys, to resize. Double-click to reset."
+          onPointerDown={onSplitStart}
+          onDoubleClick={() => setSplit(DEFAULT_SPLIT)}
+          onKeyDown={(e) => {
+            const step = e.key === 'ArrowUp' ? 0.05 : e.key === 'ArrowDown' ? -0.05 : 0;
+            if (step) { e.preventDefault(); setSplit((v) => clampSplit(v + step)); }
+            else if (e.key === 'Home') { e.preventDefault(); setSplit(0.2); }
+            else if (e.key === 'End') { e.preventDefault(); setSplit(0.75); }
+          }}
+        ><span aria-hidden="true">{'\u00b7\u00b7\u00b7'}</span></div>
         <section className="panels pane-panel" aria-label="Analysis panels">
           <div className="tabs" role="tablist">
             {PANELS.map((p, i) => (
