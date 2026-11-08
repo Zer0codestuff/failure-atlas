@@ -106,6 +106,17 @@ scripts/           screenshots, UI interaction checks, browser benchmark, clean-
 
 The Playwright scripts use the `playwright` package; set `CHROMIUM_PATH` to use a system Chromium.
 
+## Screenshots
+
+Captured from the running app by `npm run screenshots` and `npm run ui-check`:
+
+| | |
+| --- | --- |
+| [1440 px: timeline, inspector, failed check](docs/screenshots/desktop-1440-timeline.png) | [1440 px: first divergence vs the corrected run](docs/screenshots/desktop-1440-compare.png) |
+| [1440 px: dependency graph](docs/screenshots/desktop-1440-graph.png) | [1024 px](docs/screenshots/laptop-1024-timeline.png) |
+| [768 px](docs/screenshots/tablet-768-timeline.png) | [390 px: timeline](docs/screenshots/phone-390-timeline.png) and [inspector](docs/screenshots/phone-390-inspector.png) |
+| [Fork from a checkpoint, compared with its parent](docs/screenshots/state-fork-compare.png) | [Import validation error](docs/screenshots/state-import-error.png) |
+
 ## Limitations
 
 - Workflows are TypeScript generators registered in this repository. Arbitrary agent code cannot be dropped in without writing a workflow definition.
