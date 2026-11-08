@@ -36,11 +36,52 @@ export function checkFixtures(scenario: Pick<ScenarioDef, 'fixtures' | 'tools'>)
   return issues;
 }
 
-function argsFieldMatch(fields: Record<string, Json>, args: Json): boolean {
-  if (args === null || typeof args !== 'object' || Array.isArray(args)) return Object.keys(fields).length === 0;
-  for (const [path, expected] of Object.entries(fields)) {
+interface PreparedFixture {
+  index: number;
+  entry: FixtureEntry;
+  argsKey?: string;
+  fields?: Array<[string, string]>;
+}
+
+interface ToolIndex {
+  all: PreparedFixture[];
+  byArgs: Map<string, PreparedFixture[]>;
+  fieldMatchers: PreparedFixture[];
+}
+
+/** Fixtures are immutable after load, so canonical keys are computed once per fixture list. */
+const indexCache = new WeakMap<FixtureEntry[], Map<string, ToolIndex>>();
+
+function indexFor(fixtures: FixtureEntry[]): Map<string, ToolIndex> {
+  let idx = indexCache.get(fixtures);
+  if (idx) return idx;
+  idx = new Map();
+  fixtures.forEach((entry, index) => {
+    let t = idx!.get(entry.tool);
+    if (!t) idx!.set(entry.tool, (t = { all: [], byArgs: new Map(), fieldMatchers: [] }));
+    const p: PreparedFixture = { index, entry };
+    if (entry.match.args !== undefined) {
+      p.argsKey = canonicalize(entry.match.args);
+      const list = t.byArgs.get(p.argsKey) ?? [];
+      list.push(p);
+      t.byArgs.set(p.argsKey, list);
+    } else if (entry.match.argsFields !== undefined) {
+      p.fields = Object.entries(entry.match.argsFields).map(([k, v]) => [k, canonicalize(v)]);
+      t.fieldMatchers.push(p);
+    } else {
+      t.fieldMatchers.push(p); // rejected by checkFixtures; kept so behavior matches a linear scan
+    }
+    t.all.push(p);
+  });
+  indexCache.set(fixtures, idx);
+  return idx;
+}
+
+function argsFieldMatch(fields: Array<[string, string]>, args: Json): boolean {
+  if (args === null || typeof args !== 'object' || Array.isArray(args)) return fields.length === 0;
+  for (const [path, expected] of fields) {
     const actual = getPath(args, path);
-    if (actual === undefined || canonicalize(actual) !== canonicalize(expected)) return false;
+    if (actual === undefined || canonicalize(actual) !== expected) return false;
   }
   return true;
 }
@@ -53,22 +94,15 @@ function argsFieldMatch(fields: Record<string, Json>, args: Json): boolean {
  */
 export function resolveFixture(fixtures: FixtureEntry[], req: FixtureRequest, state: ExternalState): FixtureResolution {
   const argsKey = canonicalize(req.args);
+  const tool = indexFor(fixtures).get(req.tool);
+  const candidates = tool ? [...(tool.byArgs.get(argsKey) ?? []), ...tool.fieldMatchers].sort((x, y) => x.index - y.index) : [];
   const scored: Array<{ entry: FixtureEntry; score: number }> = [];
-  const nearest: string[] = [];
-  for (const f of fixtures) {
-    if (f.tool !== req.tool) continue;
+  for (const p of candidates) {
+    const f = p.entry;
     let score = 0;
-    if (f.match.args !== undefined) {
-      if (canonicalize(f.match.args) !== argsKey) {
-        nearest.push(f.id);
-        continue;
-      }
-      score += 4;
-    } else if (f.match.argsFields !== undefined) {
-      if (!argsFieldMatch(f.match.argsFields, req.args)) {
-        nearest.push(f.id);
-        continue;
-      }
+    if (p.argsKey !== undefined) score += 4;
+    else if (p.fields !== undefined) {
+      if (!argsFieldMatch(p.fields, req.args)) continue;
       score += 2;
     }
     if (f.match.state) {
@@ -92,10 +126,13 @@ export function resolveFixture(fixtures: FixtureEntry[], req: FixtureRequest, st
     scored.push({ entry: f, score });
   }
   if (scored.length === 0) {
+    // Nearest: same-tool fixtures whose arguments did not match (only computed on a miss).
+    const nearest = (tool?.all ?? []).filter((p) => (p.argsKey !== undefined ? p.argsKey !== argsKey : p.fields !== undefined && !argsFieldMatch(p.fields, req.args))).map((p) => p.entry.id);
     return { kind: 'miss', reason: `No fixture for ${req.tool} with arguments ${argsKey} (occurrence ${req.occurrence})`, nearest };
   }
-  const best = Math.max(...scored.map((s) => s.score));
-  const top = scored.filter((s) => s.score === best);
+  let best = -Infinity;
+  for (const x of scored) if (x.score > best) best = x.score;
+  const top = scored.filter((x) => x.score === best);
   if (top.length > 1) return { kind: 'ambiguous', candidates: top.map((t) => t.entry.id), score: best };
   return { kind: 'match', entry: top[0].entry, score: best };
 }

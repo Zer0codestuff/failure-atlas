@@ -17,42 +17,88 @@ const K = new Uint32Array([
 
 const encoder = new TextEncoder();
 
-export function sha256Bytes(data: Uint8Array): string {
-  const h = new Uint32Array([
-    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
-  ]);
-  const bitLen = data.length * 8;
-  const padded = new Uint8Array(((data.length + 9 + 63) >> 6) << 6);
-  padded.set(data);
-  padded[data.length] = 0x80;
-  const view = new DataView(padded.buffer);
-  view.setUint32(padded.length - 4, bitLen >>> 0, false);
-  view.setUint32(padded.length - 8, Math.floor(bitLen / 0x100000000), false);
-  const w = new Uint32Array(64);
-  for (let off = 0; off < padded.length; off += 64) {
-    for (let i = 0; i < 16; i++) w[i] = view.getUint32(off + i * 4, false);
-    for (let i = 16; i < 64; i++) {
-      const a = w[i - 15], b = w[i - 2];
-      const s0 = ((a >>> 7) | (a << 25)) ^ ((a >>> 18) | (a << 14)) ^ (a >>> 3);
-      const s1 = ((b >>> 17) | (b << 15)) ^ ((b >>> 19) | (b << 13)) ^ (b >>> 10);
-      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
-    }
-    let a = h[0], b = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
-    for (let i = 0; i < 64; i++) {
-      const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
-      const ch = (e & f) ^ (~e & g);
-      const t1 = (hh + S1 + ch + K[i] + w[i]) >>> 0;
-      const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
-      const maj = (a & b) ^ (a & c) ^ (b & c);
-      const t2 = (S0 + maj) >>> 0;
-      hh = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
-    }
-    h[0] = (h[0] + a) >>> 0; h[1] = (h[1] + b) >>> 0; h[2] = (h[2] + c) >>> 0; h[3] = (h[3] + d) >>> 0;
-    h[4] = (h[4] + e) >>> 0; h[5] = (h[5] + f) >>> 0; h[6] = (h[6] + g) >>> 0; h[7] = (h[7] + hh) >>> 0;
+function compress(h: Uint32Array, w: Uint32Array, block: Uint8Array, off: number): void {
+  for (let i = 0; i < 16; i++) {
+    const j = off + i * 4;
+    w[i] = ((block[j] << 24) | (block[j + 1] << 16) | (block[j + 2] << 8) | block[j + 3]) >>> 0;
   }
-  let out = '';
-  for (let i = 0; i < 8; i++) out += h[i].toString(16).padStart(8, '0');
-  return out;
+  for (let i = 16; i < 64; i++) {
+    const a = w[i - 15], b = w[i - 2];
+    const s0 = ((a >>> 7) | (a << 25)) ^ ((a >>> 18) | (a << 14)) ^ (a >>> 3);
+    const s1 = ((b >>> 17) | (b << 15)) ^ ((b >>> 19) | (b << 13)) ^ (b >>> 10);
+    w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+  }
+  let a = h[0], b = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
+  for (let i = 0; i < 64; i++) {
+    const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+    const ch = (e & f) ^ (~e & g);
+    const t1 = (hh + S1 + ch + K[i] + w[i]) >>> 0;
+    const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+    const maj = (a & b) ^ (a & c) ^ (b & c);
+    const t2 = (S0 + maj) >>> 0;
+    hh = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+  }
+  h[0] = (h[0] + a) >>> 0; h[1] = (h[1] + b) >>> 0; h[2] = (h[2] + c) >>> 0; h[3] = (h[3] + d) >>> 0;
+  h[4] = (h[4] + e) >>> 0; h[5] = (h[5] + f) >>> 0; h[6] = (h[6] + g) >>> 0; h[7] = (h[7] + hh) >>> 0;
+}
+
+/** Incremental SHA-256. `clone()` lets a caller take digests of several prefixes in one pass. */
+export class Sha256 {
+  private h = new Uint32Array([0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]);
+  private buf = new Uint8Array(64);
+  private bufLen = 0;
+  private total = 0;
+  private readonly w = new Uint32Array(64);
+
+  update(data: Uint8Array | string): this {
+    const bytes = typeof data === 'string' ? encoder.encode(data) : data;
+    this.total += bytes.length;
+    let i = 0;
+    if (this.bufLen > 0) {
+      const take = Math.min(64 - this.bufLen, bytes.length);
+      this.buf.set(bytes.subarray(0, take), this.bufLen);
+      this.bufLen += take;
+      i = take;
+      if (this.bufLen < 64) return this;
+      compress(this.h, this.w, this.buf, 0);
+      this.bufLen = 0;
+    }
+    for (; i + 64 <= bytes.length; i += 64) compress(this.h, this.w, bytes, i);
+    if (i < bytes.length) {
+      this.buf.set(bytes.subarray(i), 0);
+      this.bufLen = bytes.length - i;
+    }
+    return this;
+  }
+
+  clone(): Sha256 {
+    const c = new Sha256();
+    c.h.set(this.h);
+    c.buf.set(this.buf);
+    c.bufLen = this.bufLen;
+    c.total = this.total;
+    return c;
+  }
+
+  digest(): string {
+    const bitLen = this.total * 8;
+    const padLen = ((this.bufLen + 9 + 63) >> 6) << 6;
+    const tail = new Uint8Array(padLen);
+    tail.set(this.buf.subarray(0, this.bufLen));
+    tail[this.bufLen] = 0x80;
+    const view = new DataView(tail.buffer);
+    view.setUint32(padLen - 4, bitLen >>> 0, false);
+    view.setUint32(padLen - 8, Math.floor(bitLen / 0x100000000), false);
+    const h = new Uint32Array(this.h);
+    for (let off = 0; off < padLen; off += 64) compress(h, this.w, tail, off);
+    let out = '';
+    for (let i = 0; i < 8; i++) out += h[i].toString(16).padStart(8, '0');
+    return out;
+  }
+}
+
+export function sha256Bytes(data: Uint8Array): string {
+  return new Sha256().update(data).digest();
 }
 
 export function sha256(text: string): string {
@@ -65,7 +111,46 @@ export class CanonicalizationError extends Error {}
 
 /** Deterministic JSON: sorted object keys, no undefined, finite numbers only. */
 export function canonicalize(value: unknown): string {
-  return write(value, '$');
+  try {
+    return fast(value);
+  } catch (err) {
+    if (err === UNSUPPORTED) return write(value, '$'); // rerun the slow path only to name the offending location
+    throw err;
+  }
+}
+
+const UNSUPPORTED = new Error('unsupported');
+
+function fast(value: unknown): string {
+  if (value === null) return 'null';
+  switch (typeof value) {
+    case 'boolean':
+      return value ? 'true' : 'false';
+    case 'number':
+      if (!Number.isFinite(value)) throw UNSUPPORTED;
+      return JSON.stringify(Object.is(value, -0) ? 0 : value);
+    case 'string':
+      return JSON.stringify(value);
+    case 'object': {
+      if (Array.isArray(value)) {
+        let out = '[';
+        for (let i = 0; i < value.length; i++) out += (i ? ',' : '') + fast(value[i] === undefined ? null : value[i]);
+        return out + ']';
+      }
+      const obj = value as Record<string, unknown>;
+      const keys = Object.keys(obj).sort();
+      let out = '{';
+      let first = true;
+      for (const k of keys) {
+        if (obj[k] === undefined) continue;
+        out += (first ? '' : ',') + JSON.stringify(k) + ':' + fast(obj[k]);
+        first = false;
+      }
+      return out + '}';
+    }
+    default:
+      throw UNSUPPORTED;
+  }
 }
 
 function write(value: unknown, path: string): string {

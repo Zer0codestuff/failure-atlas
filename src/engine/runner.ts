@@ -1,4 +1,4 @@
-import { canonicalize, cloneJson, createRng, deepFreeze, deletePath, getPath, hashJson, setPath, shortHash, type Json } from './hash';
+import { Sha256, canonicalize, cloneJson, createRng, deepFreeze, deletePath, getPath, hashJson, setPath, shortHash, type Json } from './hash';
 import { expandTemplate, resolveFixture } from './fixtures';
 import { validate } from './jsonschema';
 import {
@@ -87,6 +87,23 @@ export function normalizeEvent(e: TraceEvent): Omit<TraceEvent, 'wt'> {
 
 export function hashEvents(events: TraceEvent[]): string {
   return hashJson(events.map(normalizeEvent));
+}
+
+/**
+ * hashEvents of several prefixes in one linear pass: the digest for seq k equals
+ * hashEvents(events.filter((e) => e.seq <= k)).
+ */
+export function prefixHashes(events: TraceEvent[], seqs: Iterable<number>): Map<number, string> {
+  const want = new Set(seqs);
+  const out = new Map<number, string>();
+  if (!want.size) return out;
+  const h = new Sha256().update('[');
+  for (let i = 0; i < events.length && out.size < want.size; i++) {
+    if (i) h.update(',');
+    h.update(canonicalize(normalizeEvent(events[i])));
+    if (want.has(events[i].seq)) out.set(events[i].seq, h.clone().update(']').digest());
+  }
+  return out;
 }
 
 const STATUS_RANK: Record<RunStatus, number> = {
@@ -307,11 +324,14 @@ class Runner {
       data: { status, outcome, executionErrors: this.errors.length },
     });
 
+    const prefixes = prefixHashes(this.events, this.checkpoints.map((c) => c.seq));
+    for (const c of this.checkpoints) c.prefixHash = prefixes.get(c.seq)!;
+
     // Fork integrity: the replayed prefix must equal the parent's recorded prefix.
     let forkInfo: Trace['fork'];
     if (this.opts.fork) {
       const cp = this.opts.fork.parent.checkpoints.find((c) => c.id === this.opts.fork!.checkpointId)!;
-      const childPrefix = hashEvents(this.events.filter((e) => e.seq <= cp.seq));
+      const childPrefix = prefixHashes(this.events, [cp.seq]).get(cp.seq);
       if (childPrefix !== cp.prefixHash) {
         throw new ForkError(
           `Fork refused: replaying ${this.scenario.id} up to checkpoint ${cp.id} did not reproduce the parent's recorded prefix. The requested change affects behavior before the checkpoint, or the implementation changed.`,
@@ -496,9 +516,17 @@ class Runner {
         return { blocked: false, value: ev.seq };
       }
       case 'checkpoint': {
-        const ev = this.emit({ kind: 'checkpoint', task: task.id, step: op.step, origin: 'workflow', summary: `Checkpoint ${op.id}: workflow and simulated state captured for a supported fork`, data: { id: op.id, stateHash: hashJson(this.state), declared: this.scenario.checkpoints.includes(op.id) } });
-        const rec: CheckpointRecord = { schema: SCHEMAS.checkpoint, id: op.id, seq: ev.seq, vt: this.clock, stateHash: hashJson(this.state), prefixHash: hashEvents(this.events) };
-        this.checkpoints.push(rec);
+        // Only checkpoints the scenario declares as forkable capture state; others are recorded as reached.
+        const declared = this.scenario.checkpoints.includes(op.id);
+        let ev: TraceEvent;
+        if (declared) {
+          const stateHash = hashJson(this.state);
+          ev = this.emit({ kind: 'checkpoint', task: task.id, step: op.step, origin: 'workflow', summary: `Checkpoint ${op.id}: workflow and simulated state captured for a supported fork`, data: { id: op.id, stateHash, declared } });
+          // prefixHash is filled in at finalization in one linear pass (see prefixHashes).
+          this.checkpoints.push({ schema: SCHEMAS.checkpoint, id: op.id, seq: ev.seq, vt: this.clock, stateHash, prefixHash: '' });
+        } else {
+          ev = this.emit({ kind: 'checkpoint', task: task.id, step: op.step, origin: 'workflow', summary: `Checkpoint ${op.id} reached; this scenario does not declare it forkable, so no state was captured`, data: { id: op.id, declared } });
+        }
         const fork = this.opts.fork;
         if (fork && fork.checkpointId === op.id && this.forkSwitchSeq === null) {
           this.forkSwitchSeq = ev.seq;

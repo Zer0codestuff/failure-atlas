@@ -185,7 +185,13 @@ export function compareRuns(a: Trace, b: Trace, opts: { maxD?: number } = {}): C
   const counts: Record<AlignOp, number> = { same: 0, changed: 0, 'only-a': 0, 'only-b': 0 };
   for (const r of rows) counts[r.op]++;
   // run.started differs whenever policy or plan differ; that is configuration, not behavior.
-  const firstIdx = rows.findIndex((r) => r.op !== 'same' && !(r.op === 'changed' && (r.a?.kind === 'run.started')));
+  // Engine annotations (the run header and fork resume notes) describe how a run was produced,
+  // not workflow behavior, so they never count as the first behavioral divergence.
+  const annotation = (r: AlignedRow) => {
+    const e = r.b ?? r.a;
+    return (r.op === 'changed' && r.a?.kind === 'run.started') || (e?.kind === 'note' && e.origin === 'engine' && r.op !== 'changed');
+  };
+  const firstIdx = rows.findIndex((r) => r.op !== 'same' && !annotation(r));
   let firstDivergence: Divergence | null = null;
   if (firstIdx >= 0) {
     const row = rows[firstIdx];
