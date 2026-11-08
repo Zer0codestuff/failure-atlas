@@ -200,6 +200,8 @@ export interface ScenarioDef {
   seed: number;
   synthetic: true;
   notes: string[];
+  /** Optional live task: a real model works on the trigger payload with the listed fixture tools. */
+  live?: { instructions: string; tools: string[]; answerPath: string };
 }
 
 export type EventKind =

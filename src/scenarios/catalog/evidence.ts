@@ -305,6 +305,11 @@ export const researchReport: ScenarioModule = {
     checkpoints: [],
     limits: { maxSteps: 500, maxVirtualMs: 60_000 },
     seed: 12,
+    live: {
+      instructions: 'You write short research reports. Call sources__retrieve with the question, then answer ONLY with JSON of the form {"claims":[{"text":string,"cites":[snapshotId]}]}. Cite only snapshot ids returned by the tool. Do not invent sources.',
+      tools: ['sources.retrieve'],
+      answerPath: 'report',
+    },
     notes: ['All snapshots and claims are synthetic text written for this scenario. They describe no real site.', 'Synthetic tests demonstrate behavior under controlled conditions; they do not establish general model reliability.'],
   }),
 };
