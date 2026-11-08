@@ -58,6 +58,26 @@ try {
   expect('number keys switch panels', (await page.getAttribute('.tabs .tab:nth-child(3)', 'aria-selected')) === 'true');
   await page.keyboard.press('1');
 
+  // 2b. The verdict states the outcome in text and offers the corrected policy as the next step.
+  expect('verdict names the failing check', /FAILING/.test((await page.textContent('.verdict')) ?? '') && !!(await page.$('.verdict-bad')));
+  await page.click('.verdict .btn.fix');
+  await settled(page);
+  await page.waitForSelector('.verdict-ok');
+  expect('corrected policy run passes and is selected', (await page.inputValue('#sel-policy')) === 'corrected');
+  await page.waitForSelector('.divergence');
+  expect('corrected run opens the comparison against the failing run', (await page.getAttribute('.tabs .tab:has-text("Compare")', 'aria-selected')) === 'true');
+  await page.screenshot({ path: 'docs/screenshots/state-corrected-compare.png' });
+  const before = Number(await page.getAttribute('.splitter', 'aria-valuenow'));
+  await page.focus('.splitter');
+  await page.keyboard.press('ArrowUp');
+  const after = Number(await page.getAttribute('.splitter', 'aria-valuenow'));
+  expect('panel splitter resizes with the keyboard', after === Math.min(75, before + 5), `${before} -> ${after}`);
+  await page.dblclick('.splitter');
+  await page.selectOption('#sel-policy', 'faulty');
+  await page.click('.tabs .tab:has-text("Checks")');
+  await page.keyboard.press('r');
+  await settled(page);
+
   // 3. Fault injection from the inspector creates a new run with that fault.
   await page.click('.tl-row:has-text("charge: request payments.charge")');
   await page.waitForSelector('section[aria-label="Inject a fault at this request"]');
