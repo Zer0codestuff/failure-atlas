@@ -17,7 +17,7 @@ interface Props {
   onOpen?: (seq: number) => void;
 }
 
-const ROW = 30;
+const ROW = 34;
 const OVERSCAN = 12;
 const MARK_LABEL: Record<Mark, string> = { fail: 'failed check evidence', divergence: 'first divergence', downstream: 'downstream of divergence', evidence: 'evidence' };
 const MARK_SYM: Record<Mark, string> = { fail: 'F', divergence: '◆', downstream: '↓', evidence: '·' };

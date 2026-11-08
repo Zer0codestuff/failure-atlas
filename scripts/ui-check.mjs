@@ -58,6 +58,23 @@ try {
   expect('number keys switch panels', (await page.getAttribute('.tabs .tab:nth-child(3)', 'aria-selected')) === 'true');
   await page.keyboard.press('1');
 
+  // 2b. The verdict states the outcome in text and offers the corrected policy as the next step.
+  expect('verdict names the failing check', /Failing/i.test((await page.textContent('.verdict')) ?? '') && !!(await page.$('.verdict-bad')));
+  expect('verdict check chips show every check with a symbol', (await page.$$('.check-chips .chip')).length === 6);
+  await page.click('.strip-cell >> nth=0');
+  expect('trace strip cells select their event in the timeline', (await page.textContent('.tl-row.selected .tl-seq'))?.trim() === '1');
+  await page.click('.verdict .btn.fix');
+  await settled(page);
+  await page.waitForSelector('.verdict-ok');
+  expect('corrected policy run passes and is selected', (await page.inputValue('#sel-policy')) === 'corrected');
+  await page.waitForSelector('.divergence');
+  expect('corrected run opens the comparison against the failing run', (await page.getAttribute('.tabs .tab:has-text("Compare")', 'aria-selected')) === 'true');
+  await page.screenshot({ path: 'docs/screenshots/state-corrected-compare.png' });
+  await page.selectOption('#sel-policy', 'faulty');
+  await page.click('.tabs .tab:has-text("Timeline")');
+  await page.keyboard.press('r');
+  await settled(page);
+
   // 3. Fault injection from the inspector creates a new run with that fault.
   await page.click('.tl-row:has-text("charge: request payments.charge")');
   await page.waitForSelector('section[aria-label="Inject a fault at this request"]');
@@ -112,7 +129,6 @@ try {
     await p.goto(base + '?paced=0');
     await settled(p);
     for (const tab of ['Checks', 'Compare', 'Graph', 'Policy', 'State', 'Export', 'Runs']) {
-      if (width <= 700) await p.click('.mobile-tabs .tab:nth-child(3)');
       await p.click(`.tabs .tab:has-text("${tab}")`);
       const over = await p.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(`no horizontal page overflow at ${width}px on ${tab}`, over <= 1, `${over}px`);

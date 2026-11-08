@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { Comparison } from '../../engine/compare';
+import { PanelHead } from './PanelHead';
 import { formatVt } from './Timeline';
 
 const OP_SYM: Record<string, string> = { same: '=', changed: '~', 'only-a': '-', 'only-b': '+' };
@@ -26,8 +27,9 @@ export function Compare({ comparison, baselineLabel, currentLabel, baselineOptio
   }, [comparison, onlyDiff]);
   const downB = new Set(comparison?.firstDivergence?.downstreamB ?? []);
   return (
-    <div className="compare">
-      <div className="row gap wrap">
+    <div className="compare panel-section">
+      <PanelHead title="Compare runs" note="Runs are aligned by semantic step and request lineage, not wall-clock position." />
+      <div className="row gap wrap compare-controls">
         <label className="inline">A (baseline)
           <select className="input" value={baselineKey} onChange={(e) => onBaseline(e.target.value)}>
             {baselineOptions.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}

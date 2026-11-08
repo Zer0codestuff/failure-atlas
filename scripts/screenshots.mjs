@@ -35,10 +35,10 @@ try {
   for (const w of WIDTHS) {
     const shots = [
       { file: `${w.name}-timeline.png`, query: '?paced=0', act: async () => {} },
-      { file: `${w.name}-compare.png`, query: '?paced=0&panel=compare', act: async (page) => { if (w.width <= 700) await page.click('.mobile-tabs .tab:nth-child(3)'); } },
+      { file: `${w.name}-compare.png`, query: '?paced=0&panel=compare', act: async () => {} },
     ];
     if (w.width >= 1024) shots.push({ file: `${w.name}-graph.png`, query: '?paced=0&panel=graph', act: async () => {} });
-    if (w.width <= 700) shots.push({ file: `${w.name}-inspector.png`, query: '?paced=0', act: async (page) => { await page.click('.mobile-tabs .tab:nth-child(2)'); } });
+    if (w.width <= 700) shots.push({ file: `${w.name}-inspector.png`, query: '?paced=0', act: async (page) => { await page.click('.tabs .tab:has-text("Inspector")'); } });
     for (const s of shots) {
       const page = await browser.newPage({ viewport: { width: w.width, height: w.height }, deviceScaleFactor: 1 });
       page.on('console', (m) => { if (m.type() === 'error') problems.push(`${w.name} ${s.file}: console error ${m.text()}`); });

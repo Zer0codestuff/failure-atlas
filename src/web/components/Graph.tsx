@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { DependencyGraph, GraphNode } from '../../engine/graph';
+import { PanelHead } from './PanelHead';
 
 const NODE_SYM: Record<GraphNode['status'], string> = { ok: 'o', error: 'x', blocked: '#', neutral: '.' };
 const MAX = 220;
@@ -17,8 +18,9 @@ export function Graph({ graph, selectedSeq, onSelect }: { graph: DependencyGraph
   }, [graph]);
   if (!graph || !layout) return <p className="empty">No run yet.</p>;
   return (
-    <div className="graph">
-      <p className="small muted">Nodes are requests, state changes, faults and checks. Edges: solid = recorded cause, dashed = retry of the same logical request, dotted = task spawn. {graph.nodes.length > MAX ? `Showing the first ${MAX} of ${graph.nodes.length} nodes.` : `${graph.nodes.length} nodes, ${graph.edges.length} edges.`}</p>
+    <div className="graph panel-section">
+      <PanelHead title="Dependencies" />
+      <p className="panel-note">Nodes are requests, state changes, faults and checks. Edges: solid = recorded cause, dashed = retry of the same logical request, dotted = task spawn. {graph.nodes.length > MAX ? `Showing the first ${MAX} of ${graph.nodes.length} nodes.` : `${graph.nodes.length} nodes, ${graph.edges.length} edges.`}</p>
       <div className="graph-scroll">
         <svg width={layout.width} height={layout.height} role="img" aria-label="Dependency graph">
           {layout.lanes.map((l, i) => <text key={l} x={16 + i * 230} y={16} className="lane-label">{l}</text>)}

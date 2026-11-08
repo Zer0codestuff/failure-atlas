@@ -12,10 +12,13 @@ import { Inspector } from './components/Inspector';
 import { JsonView } from './components/JsonView';
 import { PolicyPanel } from './components/PolicyPanel';
 import { Timeline, type Mark } from './components/Timeline';
+import { PanelHead } from './components/PanelHead';
+import { TraceStrip } from './components/TraceStrip';
+import { Verdict } from './components/Verdict';
 import { EngineClient, EngineError } from './engine-client';
 import type { ExportPreview, ImportResult, RunResult } from './protocol';
 
-interface RunRecord {
+export interface RunRecord {
   key: string;
   label: string;
   scenarioId: string | null;
@@ -28,10 +31,10 @@ interface RunRecord {
   importInfo?: ImportResult;
 }
 
-type Panel = 'checks' | 'compare' | 'graph' | 'policy' | 'state' | 'export' | 'runs';
-type MobileView = 'timeline' | 'inspector' | 'panel';
+type View = 'timeline' | 'checks' | 'compare' | 'graph' | 'policy' | 'state' | 'export' | 'runs';
 
-const PANELS: Array<{ id: Panel; label: string }> = [
+const VIEWS: Array<{ id: View; label: string }> = [
+  { id: 'timeline', label: 'Timeline' },
   { id: 'checks', label: 'Checks' },
   { id: 'compare', label: 'Compare' },
   { id: 'graph', label: 'Graph' },
@@ -43,6 +46,7 @@ const PANELS: Array<{ id: Panel; label: string }> = [
 
 const prefersReducedMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const params = new URLSearchParams(location.search);
+const pad2 = (n: number) => String(n).padStart(2, '0');
 
 function runLabel(policy: Policy, plan: FaultPlan | null) {
   return `${policy.label} · ${plan ? plan.title : 'no faults'}`;
@@ -63,8 +67,9 @@ export function App() {
   const [baselineKey, setBaselineKey] = useState<string | null>(null);
   const [streaming, setStreaming] = useState<TraceEvent[] | null>(null);
   const [selectedSeq, setSelectedSeq] = useState<number | null>(null);
-  const [panel, setPanel] = useState<Panel>((params.get('panel') as Panel) ?? 'checks');
-  const [mobileView, setMobileView] = useState<MobileView>('timeline');
+  const initialView = params.get('panel') as View | null;
+  const [view, setView] = useState<View>(initialView && VIEWS.some((v) => v.id === initialView) ? initialView : 'timeline');
+  const [mobileInspector, setMobileInspector] = useState(false);
   const [comparison, setComparison] = useState<Comparison | null>(null);
   const [comparing, setComparing] = useState(false);
   const [error, setError] = useState<{ message: string; issues: string[] } | null>(null);
@@ -129,6 +134,18 @@ export function App() {
 
   const runCurrent = useCallback(() => execute({ scenarioId: scenario.id, policy, plan }), [execute, scenario.id, policy, plan]);
 
+  // Rerun the same faults with the corrected policy, keep the failing run as baseline, open the comparison.
+  const runCorrected = useCallback(async () => {
+    const corrected = scenario.policies.find((p) => p.id === 'corrected');
+    if (!corrected || !current) return;
+    const faults = current.trace.faultPlan ?? null;
+    const failingKey = current.key;
+    setCustomPolicy(null);
+    setPolicyId('corrected');
+    const key = await execute({ scenarioId: scenario.id, policy: corrected, plan: faults });
+    if (key) { setBaselineKey(failingKey); setView('compare'); setMobileInspector(false); setTimeout(() => document.querySelector('.workspace')?.scrollIntoView({ block: 'start' }), 0); }
+  }, [scenario, current, execute]);
+
   // Open directly into a working example: the faulty run under the first fault preset,
   // with the corrected policy under the same faults as comparison baseline.
   const booted = useRef(false);
@@ -140,7 +157,6 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Comparison against the baseline, computed in the worker.
   useEffect(() => {
     if (!current || !baseline || current.key === baseline.key) { setComparison(null); return; }
     let live = true;
@@ -168,12 +184,14 @@ export function App() {
     const m = getScenario(id)!;
     setScenarioId(id);
     setPolicyId('faulty');
-    const preset = m.scenario.faultPresets[0]?.id ?? 'none';
-    setPresetId(preset);
+    setPresetId(m.scenario.faultPresets[0]?.id ?? 'none');
     setCustomPolicy(null);
     setCustomPlan(null);
     setRailOpen(false);
     setQuery('');
+    setNotice(null);
+    setView('timeline');
+    setMobileInspector(false);
     const p = m.scenario.policies.find((x) => x.id === 'faulty') ?? m.scenario.policies[0];
     const f = m.scenario.faultPresets[0] ?? null;
     const corrected = m.scenario.policies.find((x) => x.id === 'corrected') ?? p;
@@ -232,7 +250,6 @@ export function App() {
     }
   };
 
-  // Keyboard shortcuts.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
@@ -240,16 +257,16 @@ export function App() {
         if (e.key === 'Escape') t.blur();
         return;
       }
-      if (e.key === '/') { e.preventDefault(); document.getElementById('tl-search')?.focus(); }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === '/') { e.preventDefault(); setView('timeline'); setTimeout(() => document.getElementById('tl-search')?.focus(), 0); }
       else if (e.key === 'r' && !busy) { e.preventDefault(); void runCurrent(); }
-      else if (e.key === 't') document.querySelector<HTMLElement>('.timeline-scroll')?.focus();
-      else if (/^[1-7]$/.test(e.key)) setPanel(PANELS[Number(e.key) - 1].id);
+      else if (e.key === 't') { setView('timeline'); setTimeout(() => document.querySelector<HTMLElement>('.timeline-scroll')?.focus(), 0); }
+      else if (/^[1-8]$/.test(e.key)) { setView(VIEWS[Number(e.key) - 1].id); setMobileInspector(false); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [busy, runCurrent]);
 
-  // Drag and drop import.
   useEffect(() => {
     const over = (e: DragEvent) => e.preventDefault();
     const drop = (e: DragEvent) => { e.preventDefault(); const f = e.dataTransfer?.files?.[0]; if (f) void onImportFile(f); };
@@ -269,150 +286,203 @@ export function App() {
     for (const r of runs) if (r.scenarioId && r.kind !== 'import') m.set(r.scenarioId, r);
     return m;
   }, [runs]);
+  const groupIndex = grouped.findIndex(([, ms]) => ms.some((m) => m.scenario.id === scenario.id));
 
-  const selectEvent = (seq: number) => { setSelectedSeq(seq); setMobileView('inspector'); };
+  const selectEvent = (seq: number) => { setSelectedSeq(seq); setMobileInspector(true); };
+  const revealWorkspace = () => setTimeout(() => document.querySelector('.workspace')?.scrollIntoView({ block: 'start', behavior: prefersReducedMotion() ? 'auto' : 'smooth' }), 0);
+  const openView = (v: View) => { setView(v); setMobileInspector(false); };
+  const failCount = current?.summary?.fail ?? 0;
 
   return (
-    <div className={`app mv-${mobileView}`}>
+    <div className="app">
       <header className="topbar">
-        <button className="btn ghost rail-toggle" aria-expanded={railOpen} onClick={() => setRailOpen(!railOpen)}>[=] scenarios</button>
-        <h1 className="brand">FAILURE ATLAS</h1>
-        <span className={`mode mode-${mode}`} title={current?.trace.capabilities.reasons.join(' ') ?? ''}>
-          {mode === 'simulation' ? 'SIMULATION · fixtures · virtual time · reproducible' : mode === 'playback' ? 'PLAYBACK · recorded · not re-executable' : 'LIVE RECORDING · not reproducible'}
+        <button className="btn icon rail-toggle" aria-expanded={railOpen} aria-controls="scenario-rail" onClick={() => setRailOpen(!railOpen)} aria-label="Scenarios">
+          <span aria-hidden="true">{railOpen ? 'x' : '='}</span>
+        </button>
+        <a className="brand" href="./" aria-label="Failure Atlas home">
+          <span className="brand-mark" aria-hidden="true">FA</span>
+          <span className="brand-name">Failure Atlas</span>
+        </a>
+        <span className={`mode-chip mode-${mode}`} title={current?.trace.capabilities.reasons.join(' ') ?? ''}>
+          <span className="dot" aria-hidden="true" />
+          {mode === 'simulation' ? 'Simulation' : mode === 'playback' ? 'Playback' : 'Live recording'}
+          <span className="mode-detail">{mode === 'simulation' ? ' · fixtures · virtual time · reproducible' : mode === 'playback' ? ' · recorded · not re-executable' : ' · not reproducible'}</span>
         </span>
-        <div className="controls">
-          <label className="sr-only" htmlFor="sel-policy">Policy</label>
-          <select id="sel-policy" className="input" value={customPolicy ? 'custom' : policyId} onChange={(e) => { setCustomPolicy(null); setPolicyId(e.target.value); }}>
-            {scenario.policies.map((p) => <option key={p.id} value={p.id}>policy: {p.label}</option>)}
-            {customPolicy && <option value="custom">policy: {customPolicy.label}</option>}
-          </select>
-          <label className="sr-only" htmlFor="sel-faults">Fault plan</label>
-          <select id="sel-faults" className="input" value={presetId} onChange={(e) => { setCustomPlan(null); setPresetId(e.target.value); }}>
-            <option value="none">faults: none</option>
-            {scenario.faultPresets.map((f) => <option key={f.id} value={f.id}>faults: {f.title}</option>)}
-            {customPlan && <option value="custom">faults: {customPlan.title}</option>}
-          </select>
-          <button className="btn primary" onClick={() => void runCurrent()} disabled={busy} title="Run (r)">{busy ? 'running…' : '> run'}</button>
-          <label className="inline small" title="Deliver recorded events gradually so they can be watched. Off when reduced motion is requested."><input type="checkbox" checked={paced} onChange={(e) => setPaced(e.target.checked)} /> paced</label>
-          <button className="btn ghost" onClick={() => fileInput.current?.click()}>import</button>
+        <div className="top-actions">
+          <label className="toggle" title="Deliver recorded events gradually so they can be watched. Off when reduced motion is requested.">
+            <input type="checkbox" checked={paced} onChange={(e) => setPaced(e.target.checked)} />
+            <span className="toggle-track" aria-hidden="true" />
+            <span className="toggle-label">paced</span>
+          </label>
+          <button className="btn" onClick={() => fileInput.current?.click()} title="Import a trace, bundle or OTLP/JSON file, or drop it on the page">import <span aria-hidden="true">↑</span></button>
           <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void onImportFile(f); e.target.value = ''; }} />
         </div>
       </header>
 
-      <nav className={`rail${railOpen ? ' open' : ''}`} aria-label="Scenarios">
-        {grouped.map(([mech, ms]) => (
-          <section key={mech}>
-            <h2 className="rail-group">{mech}</h2>
-            <ul className="plain">
-              {ms.map((m) => {
-                const last = lastByScenario.get(m.scenario.id);
-                const fails = last?.summary?.fail ?? 0;
-                return (
-                  <li key={m.scenario.id}>
-                    <button className={`rail-item${m.scenario.id === scenario.id ? ' active' : ''}`} aria-current={m.scenario.id === scenario.id ? 'true' : undefined} onClick={() => selectScenario(m.scenario.id)}>
-                      <span className="rail-title">{m.scenario.title}</span>
-                      {last && <span className={`rail-status ${fails ? 'bad' : 'ok'}`}>{fails ? `x ${fails} failing` : 'o all evaluated pass'}</span>}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        ))}
-        <p className="rail-foot small muted">All scenarios are synthetic and run on local fixtures. Keys: r run · / search · t timeline · j/k move · 1-7 panels.</p>
-      </nav>
-
-      <main className="main">
-        <div className="scenario-head">
-          <div>
-            <h2 className="scen-title">{scenario.title}</h2>
-            <p className="scen-sum">{scenario.summary}</p>
-          </div>
-          {current && (
-            <p className="run-line small">
-              <span className="mono">{current.trace.id}</span> · status <strong>{current.trace.status}</strong> · {current.trace.events.length} events · {current.label}
-              {current.trace.parentRunId && <> · forked from <span className="mono">{current.trace.parentRunId}</span></>}
-            </p>
-          )}
-        </div>
-        <div className="mobile-tabs" role="tablist" aria-label="Views">
-          {(['timeline', 'inspector', 'panel'] as MobileView[]).map((v) => (
-            <button key={v} role="tab" aria-selected={mobileView === v} className={`tab${mobileView === v ? ' active' : ''}`} onClick={() => setMobileView(v)}>{v === 'panel' ? PANELS.find((p) => p.id === panel)!.label : v}</button>
-          ))}
-        </div>
-        {error && (
-          <div className="notice bad" role="alert">
-            <strong>{error.message}</strong>
-            {error.issues.length > 0 && <ul className="plain small">{error.issues.map((i) => <li key={i}>{i}</li>)}</ul>}
-            <button className="btn ghost" onClick={() => setError(null)}>dismiss</button>
-          </div>
-        )}
-        {notice && <div className="notice" role="status">{notice} <button className="btn ghost" onClick={() => setNotice(null)}>dismiss</button></div>}
-        <div className="work">
-          <div className="pane-timeline">
-            <Timeline events={shownEvents} selectedSeq={selectedSeq} onSelect={setSelectedSeq} marks={marks} query={query} onQuery={setQuery} kindFilter={kindFilter} onKindFilter={setKindFilter} running={busy} onOpen={selectEvent} />
-          </div>
-          <div className="pane-inspector">
-            <Inspector trace={current && !busy ? current.trace : null} event={busy ? null : selectedEvent} scenario={current?.scenarioId ? getScenario(current.scenarioId)?.scenario ?? null : null} assertions={current?.assertions ?? []} onSelect={setSelectedSeq} onInjectFault={onInjectFault} onFork={onFork} busy={busy} onBack={() => setMobileView('timeline')} />
-          </div>
-        </div>
-        <section className="panels pane-panel" aria-label="Analysis panels">
-          <div className="tabs" role="tablist">
-            {PANELS.map((p, i) => (
-              <button key={p.id} role="tab" aria-selected={panel === p.id} className={`tab${panel === p.id ? ' active' : ''}`} onClick={() => { setPanel(p.id); setMobileView('panel'); }} title={`${p.label} (${i + 1})`}>
-                {p.label}
-                {p.id === 'checks' && current?.summary && current.summary.fail > 0 && <span className="badge bad">{current.summary.fail}</span>}
-                {p.id === 'compare' && comparison?.firstDivergence && <span className="badge">◆</span>}
-              </button>
-            ))}
-          </div>
-          <div className="panel-body" role="tabpanel">
-            {panel === 'checks' && <Checks trace={current?.trace ?? null} assertions={current?.assertions ?? []} summary={current?.summary ?? null} onSelect={selectEvent} />}
-            {panel === 'compare' && (
-              <Compare
-                comparison={comparison}
-                computing={comparing}
-                baselineKey={baselineKey ?? ''}
-                baselineLabel={baseline?.label ?? 'none'}
-                currentLabel={current?.label ?? 'none'}
-                baselineOptions={runs.filter((r) => r.key !== currentKey).map((r) => ({ key: r.key, label: `${r.key} ${r.label}` }))}
-                onBaseline={setBaselineKey}
-                onSelectB={selectEvent}
-              />
-            )}
-            {panel === 'graph' && <Graph graph={graph} selectedSeq={selectedSeq} onSelect={selectEvent} />}
-            {panel === 'policy' && <PolicyPanel workflow={mod.workflow} policy={policy} busy={busy} onApply={(p) => { setCustomPolicy(p); void execute({ scenarioId: scenario.id, policy: p, plan }); }} />}
-            {panel === 'state' && (current?.trace.finalState ? (
-              <div>
-                <p className="small">Final simulated state. Assertions read this store, not workflow text output. Hash <span className="mono">{current.trace.hashes.state?.slice(0, 16)}</span>.</p>
-                <pre className="json small">{JSON.stringify(current.trace.finalState, null, 2)}</pre>
-              </div>
-            ) : <p className="empty">{current ? 'This trace carries no state. Playback traces record events only.' : 'No run yet.'}</p>)}
-            {panel === 'export' && (
-              <Export trace={current?.trace ?? null} preview={exportPreview} error={exportError} onPreview={async (inc, paths) => {
-                if (!current?.scenarioId) return;
-                setExportError(null);
-                try { setExportPreview(await engine.exportPreview(current.scenarioId, current.trace, inc, paths)); } catch (err) { setExportError(err instanceof Error ? err.message : String(err)); }
-              }} />
-            )}
-            {panel === 'runs' && (
-              <div>
-                <p className="small">Runs in this session. Finalized runs are immutable; forks and fault experiments always create new runs.</p>
-                <ul className="plain runs">
-                  {runs.map((r) => (
-                    <li key={r.key} className={r.key === currentKey ? 'active' : ''}>
-                      <button className="link left" onClick={() => { setCurrentKey(r.key); setSelectedSeq(null); }}>{r.key} {r.parentKey ? `<- ${r.parentKey} ` : ''}{r.label}</button>
-                      <span className="muted small"> {r.trace.mode} · {r.trace.status} · {r.trace.events.length} events · {r.summary ? `${r.summary.fail} failing` : 'no checks'} · engine {r.elapsedMs.toFixed(1)} ms{r.key === baselineKey ? ' · baseline' : ''}</span>
-                      {r.key !== baselineKey && r.key !== currentKey && <button className="btn ghost small" onClick={() => setBaselineKey(r.key)}>set as baseline</button>}
+      <div className="shell">
+        <nav id="scenario-rail" className={`rail${railOpen ? ' open' : ''}`} aria-label="Scenarios">
+          <p className="eyebrow rail-eyebrow">{pad2(SCENARIOS.length)} / scenarios</p>
+          {grouped.map(([mech, ms], gi) => (
+            <section key={mech} className="rail-section">
+              <h2 className="rail-group"><span className="rail-num">{pad2(gi + 1)}</span> {mech}</h2>
+              <ul className="plain">
+                {ms.map((m) => {
+                  const last = lastByScenario.get(m.scenario.id);
+                  const fails = last?.summary?.fail ?? 0;
+                  const active = m.scenario.id === scenario.id;
+                  const state = !last ? 'idle' : fails ? 'bad' : 'ok';
+                  return (
+                    <li key={m.scenario.id}>
+                      <button className={`rail-item${active ? ' active' : ''}`} aria-current={active ? 'true' : undefined} onClick={() => selectScenario(m.scenario.id)}>
+                        <span className={`rail-dot ${state}`} aria-hidden="true" />
+                        <span className="rail-title">{m.scenario.title}</span>
+                        {last && <span className={`rail-status ${state}`}>{fails ? `${fails} failing` : 'all evaluated pass'}</span>}
+                      </button>
                     </li>
-                  ))}
-                </ul>
-                {current && <JsonView value={current.trace} label="Raw trace JSON" filename={`${current.trace.id}.trace.json`} />}
-              </div>
-            )}
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
+          <div className="rail-foot">
+            <p className="eyebrow">keys</p>
+            <dl className="keys">
+              <dt>r</dt><dd>run</dd><dt>/</dt><dd>search</dd><dt>t</dt><dd>timeline</dd><dt>j k</dt><dd>move</dd><dt>1-8</dt><dd>views</dd>
+            </dl>
+            <p className="muted small">All scenarios are synthetic and run on local fixtures. Nothing leaves this browser.</p>
           </div>
-        </section>
-      </main>
+        </nav>
+        {railOpen && <button className="scrim" aria-label="Close scenarios" onClick={() => setRailOpen(false)} />}
+
+        <main className="main">
+          <section className="hero" aria-labelledby="scen-title">
+            <div className="hero-text">
+              <p className="eyebrow">{pad2(groupIndex + 1)} / {scenario.mechanism}</p>
+              <h1 id="scen-title" className="scen-title">{scenario.title}</h1>
+              <p className="scen-sum">{scenario.summary}</p>
+            </div>
+            <div className="run-card" role="group" aria-label="Run configuration">
+              <label className="field" htmlFor="sel-policy">
+                <span className="field-label">policy</span>
+                <select id="sel-policy" className="input" value={customPolicy ? 'custom' : policyId} onChange={(e) => { setCustomPolicy(null); setPolicyId(e.target.value); }}>
+                  {scenario.policies.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                  {customPolicy && <option value="custom">{customPolicy.label}</option>}
+                </select>
+              </label>
+              <label className="field" htmlFor="sel-faults">
+                <span className="field-label">faults</span>
+                <select id="sel-faults" className="input" value={presetId} onChange={(e) => { setCustomPlan(null); setPresetId(e.target.value); }}>
+                  <option value="none">none</option>
+                  {scenario.faultPresets.map((f) => <option key={f.id} value={f.id}>{f.title}</option>)}
+                  {customPlan && <option value="custom">{customPlan.title}</option>}
+                </select>
+              </label>
+              <button className="btn primary run-btn" onClick={() => void runCurrent()} disabled={busy} title="Run (r)">{busy ? 'running…' : 'run'} <span aria-hidden="true">{busy ? '' : '→'}</span></button>
+            </div>
+          </section>
+
+          <Verdict
+            current={busy ? null : current}
+            busy={busy}
+            streamed={streaming?.length ?? 0}
+            baseline={baseline}
+            correctedAvailable={scenario.policies.some((p) => p.id === 'corrected')}
+            onEvidence={(seq) => { setView('timeline'); selectEvent(seq); revealWorkspace(); }}
+            onRunCorrected={runCorrected}
+            onCompare={() => { openView('compare'); revealWorkspace(); }}
+            onChecks={() => { openView('checks'); revealWorkspace(); }}
+          >
+            <TraceStrip events={shownEvents} marks={marks} selectedSeq={selectedSeq} onSelect={(s) => { setView('timeline'); setSelectedSeq(s); }} />
+          </Verdict>
+
+          {error && (
+            <div className="notice bad" role="alert">
+              <div><strong>{error.message}</strong>
+                {error.issues.length > 0 && <ul className="plain small">{error.issues.map((i) => <li key={i}>{i}</li>)}</ul>}
+              </div>
+              <button className="btn ghost" onClick={() => setError(null)}>dismiss</button>
+            </div>
+          )}
+          {notice && <div className="notice" role="status"><div>{notice}</div><button className="btn ghost" onClick={() => setNotice(null)}>dismiss</button></div>}
+
+          <section className={`workspace${mobileInspector ? ' show-inspector' : ''}`} aria-label="Workspace">
+            <div className="tabs" role="tablist" aria-label="Views">
+              {VIEWS.map((v, i) => (
+                <button key={v.id} role="tab" aria-selected={view === v.id && !mobileInspector} className={`tab${view === v.id ? ' active' : ''}`} onClick={() => openView(v.id)} title={`${v.label} (${i + 1})`}>
+                  <span className="tab-label">{v.label}</span>
+                  <span className="tab-key" aria-hidden="true">[{i + 1}]</span>
+                  {v.id === 'checks' && failCount > 0 && <span className="badge bad">{failCount}</span>}
+                  {v.id === 'compare' && comparison?.firstDivergence && <span className="badge">◆</span>}
+                </button>
+              ))}
+              <button role="tab" aria-selected={mobileInspector} className={`tab mobile-only${mobileInspector ? ' active' : ''}`} onClick={() => setMobileInspector(true)}>
+                <span className="tab-label">Inspector</span>
+              </button>
+            </div>
+            <div className="work">
+              <div className="pane-view" role="tabpanel">
+                {view === 'timeline' && <Timeline events={shownEvents} selectedSeq={selectedSeq} onSelect={setSelectedSeq} marks={marks} query={query} onQuery={setQuery} kindFilter={kindFilter} onKindFilter={setKindFilter} running={busy} onOpen={selectEvent} />}
+                {view !== 'timeline' && (
+                  <div className="panel-body">
+                    {view === 'checks' && <Checks trace={current?.trace ?? null} assertions={current?.assertions ?? []} summary={current?.summary ?? null} onSelect={selectEvent} />}
+                    {view === 'compare' && (
+                      <Compare
+                        comparison={comparison}
+                        computing={comparing}
+                        baselineKey={baselineKey ?? ''}
+                        baselineLabel={baseline?.label ?? 'none'}
+                        currentLabel={current?.label ?? 'none'}
+                        baselineOptions={runs.filter((r) => r.key !== currentKey).map((r) => ({ key: r.key, label: `${r.key} ${r.label}` }))}
+                        onBaseline={setBaselineKey}
+                        onSelectB={selectEvent}
+                      />
+                    )}
+                    {view === 'graph' && <Graph graph={graph} selectedSeq={selectedSeq} onSelect={selectEvent} />}
+                    {view === 'policy' && <PolicyPanel workflow={mod.workflow} policy={policy} busy={busy} onApply={(p) => { setCustomPolicy(p); void execute({ scenarioId: scenario.id, policy: p, plan }); }} />}
+                    {view === 'state' && (current?.trace.finalState ? (
+                      <div className="panel-section">
+                        <PanelHead title="Final state" note={<>Assertions read this store, not workflow text output. Hash <span className="mono">{current.trace.hashes.state?.slice(0, 16)}</span>.</>} />
+                        <pre className="json">{JSON.stringify(current.trace.finalState, null, 2)}</pre>
+                      </div>
+                    ) : <p className="empty">{current ? 'This trace carries no state. Playback traces record events only.' : 'No run yet.'}</p>)}
+                    {view === 'export' && (
+                      <Export trace={current?.trace ?? null} preview={exportPreview} error={exportError} onPreview={async (inc, paths) => {
+                        if (!current?.scenarioId) return;
+                        setExportError(null);
+                        try { setExportPreview(await engine.exportPreview(current.scenarioId, current.trace, inc, paths)); } catch (err) { setExportError(err instanceof Error ? err.message : String(err)); }
+                      }} />
+                    )}
+                    {view === 'runs' && (
+                      <div className="panel-section">
+                        <PanelHead title="Runs in this session" note="Finalized runs are immutable; forks and fault experiments always create new runs." />
+                        <ul className="plain runs">
+                          {runs.map((r) => {
+                            const state = !r.summary ? 'idle' : r.summary.fail ? 'bad' : 'ok';
+                            return (
+                              <li key={r.key} className={r.key === currentKey ? 'active' : ''}>
+                                <span className={`rail-dot ${state}`} aria-hidden="true" />
+                                <div className="run-main">
+                                  <button className="link left" onClick={() => { setCurrentKey(r.key); setSelectedSeq(null); }}><span className="mono muted">{r.key}</span> {r.parentKey ? `<- ${r.parentKey} ` : ''}{r.label}</button>
+                                  <span className="muted small">{r.trace.mode} · {r.trace.status} · {r.trace.events.length} events · {r.summary ? `${r.summary.fail} failing` : 'no checks'} · engine {r.elapsedMs.toFixed(1)} ms{r.key === baselineKey ? ' · baseline' : ''}</span>
+                                </div>
+                                {r.key !== baselineKey && r.key !== currentKey && <button className="btn small" onClick={() => setBaselineKey(r.key)}>set as baseline</button>}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        {current && <JsonView value={current.trace} label="Raw trace JSON" filename={`${current.trace.id}.trace.json`} />}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="pane-inspector">
+                <Inspector trace={current && !busy ? current.trace : null} event={busy ? null : selectedEvent} scenario={current?.scenarioId ? getScenario(current.scenarioId)?.scenario ?? null : null} assertions={current?.assertions ?? []} onSelect={setSelectedSeq} onInjectFault={onInjectFault} onFork={onFork} busy={busy} onBack={() => setMobileInspector(false)} />
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
     </div>
   );
 }
