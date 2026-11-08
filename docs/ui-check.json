@@ -1,0 +1,231 @@
+{
+  "generatedAt": "2026-11-08T13:33:36.923Z",
+  "results": [
+    {
+      "name": "reduced motion disables paced delivery",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "opens into a working failing example",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Home selects the first event",
+      "ok": true,
+      "detail": "got 1"
+    },
+    {
+      "name": "j moves the selection down",
+      "ok": true,
+      "detail": "got 3"
+    },
+    {
+      "name": "k moves the selection up",
+      "ok": true,
+      "detail": "got 2"
+    },
+    {
+      "name": "inspector follows keyboard selection",
+      "ok": true,
+      "detail": "#21 run.finished"
+    },
+    {
+      "name": "/ focuses search",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "search filters events",
+      "ok": true,
+      "detail": "12 of 21"
+    },
+    {
+      "name": "Escape leaves the search field",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "number keys switch panels",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "injected fault produces a new custom run",
+      "ok": true,
+      "detail": "sim-d5d83fa1645e324f · status completed · 22 events · Retry without idempotency key · Custom: drop-response after the tool commits its side effect for payments.charge#1 + 1 preset fault(s)"
+    },
+    {
+      "name": "fork verifies the replayed prefix",
+      "ok": true,
+      "detail": "Forked at before-charge: the replayed prefix matched the parent (hash 18e72314621f). The parent run is unchanged. dismiss"
+    },
+    {
+      "name": "forked run passes its checks",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "invalid import shows the validation issues",
+      "ok": true,
+      "detail": "Trace x failed validation with 5 issue(s).events[0].schema is undefined, expected fa.event/1events[0].seq is 5, expected 1 (sequence numbers must be contiguous)events[0].vt must be a non-decreasing numberevents[0].kind undefined is not a known event kindevents[0].summary must be a stringdismiss"
+    },
+    {
+      "name": "script text is never executed",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "paced run shows a loading state",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no horizontal page overflow at 1440px on Checks",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 1440px on Compare",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 1440px on Graph",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 1440px on Policy",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 1440px on State",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 1440px on Export",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 1440px on Runs",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 1024px on Checks",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 1024px on Compare",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 1024px on Graph",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 1024px on Policy",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 1024px on State",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 1024px on Export",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 1024px on Runs",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 768px on Checks",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 768px on Compare",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 768px on Graph",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 768px on Policy",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 768px on State",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 768px on Export",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 768px on Runs",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 390px on Checks",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 390px on Compare",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 390px on Graph",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 390px on Policy",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 390px on State",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 390px on Export",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no horizontal page overflow at 390px on Runs",
+      "ok": true,
+      "detail": "0px"
+    },
+    {
+      "name": "no console or page errors",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "errors": []
+}

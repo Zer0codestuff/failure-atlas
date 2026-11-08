@@ -7,7 +7,7 @@ import { chromium } from 'playwright';
 const OUT = 'docs/screenshots';
 const WIDTHS = [
   { name: 'desktop-1440', width: 1440, height: 900 },
-  { name: 'laptop-1100', width: 1100, height: 820 },
+  { name: 'laptop-1024', width: 1024, height: 768 },
   { name: 'tablet-768', width: 768, height: 1024 },
   { name: 'phone-390', width: 390, height: 844 },
 ];
@@ -37,7 +37,7 @@ try {
       { file: `${w.name}-timeline.png`, query: '?paced=0', act: async () => {} },
       { file: `${w.name}-compare.png`, query: '?paced=0&panel=compare', act: async (page) => { if (w.width <= 700) await page.click('.mobile-tabs .tab:nth-child(3)'); } },
     ];
-    if (w.width >= 1100) shots.push({ file: `${w.name}-graph.png`, query: '?paced=0&panel=graph', act: async () => {} });
+    if (w.width >= 1024) shots.push({ file: `${w.name}-graph.png`, query: '?paced=0&panel=graph', act: async () => {} });
     if (w.width <= 700) shots.push({ file: `${w.name}-inspector.png`, query: '?paced=0', act: async (page) => { await page.click('.mobile-tabs .tab:nth-child(2)'); } });
     for (const s of shots) {
       const page = await browser.newPage({ viewport: { width: w.width, height: w.height }, deviceScaleFactor: 1 });

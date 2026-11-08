@@ -21,8 +21,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "fa": "tsx src/cli/main.ts",
-    "bench": "tsx bench/bench.ts",
-    "screenshots": "node scripts/screenshots.mjs"
+    "bench": "node --expose-gc --import tsx bench/bench.ts",
+    "screenshots": "node scripts/screenshots.mjs",
+    "ui-check": "node scripts/ui-check.mjs",
+    "bench:browser": "node scripts/browser-bench.mjs",
+    "check:clean-env": "bash scripts/clean-env-check.sh"
   },
   "dependencies": {
     "@fontsource/jetbrains-mono": "^5.1.1",
