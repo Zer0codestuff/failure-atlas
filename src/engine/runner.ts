@@ -533,12 +533,13 @@ class Runner {
 
   // ------------------------------------------------------------ tool calls
 
-  private matchFaults(point: Fault['point'], tool: string, args: Json): ActiveFault[] {
+  private matchFaults(point: Fault['point'], tool: string, args: Json, requestId: string): ActiveFault[] {
     const out: ActiveFault[] = [];
     for (const af of this.faults) {
       const f = af.fault;
       if (f.point !== point || f.target.tool !== tool) continue;
       if (f.target.beforeMs !== undefined && this.clock >= f.target.beforeMs) continue;
+      if (f.target.requestId !== undefined && f.target.requestId !== requestId) continue;
       if (f.target.argsMatch) {
         let ok = true;
         for (const [p, v] of Object.entries(f.target.argsMatch)) {
@@ -618,7 +619,7 @@ class Runner {
 
     // 2. Faults before the request reaches the simulated tool.
     let preDelay = 0;
-    for (const af of this.matchFaults('before-request', tool, args)) {
+    for (const af of this.matchFaults('before-request', tool, args, requestId)) {
       const f = af.fault;
       const fe = this.emit({ ...base, kind: 'fault.injected', origin: 'fault', summary: `Fault ${f.id} before request: ${f.description}`, data: { faultId: f.id, point: f.point, effect: f.effect as unknown as Json }, causes: [req.seq] });
       if (f.effect.type === 'error') {
@@ -690,7 +691,7 @@ class Runner {
       let dropped = false;
       const causes = [req.seq, ...writeSeqs];
       // after-tool-commit faults: the write happened, the caller may never learn it.
-      for (const af of this.matchFaults('after-tool-commit', tool, args)) {
+      for (const af of this.matchFaults('after-tool-commit', tool, args, requestId)) {
         const f = af.fault;
         const fe = this.emit({ ...base, kind: 'fault.injected', origin: 'fault', summary: `Fault ${f.id} after commit: ${f.description}`, data: { faultId: f.id, point: f.point, effect: f.effect as unknown as Json, committedWrites: writeSeqs.length }, causes });
         causes.push(fe.seq);
@@ -699,7 +700,7 @@ class Runner {
         else if (f.effect.type === 'delay') delay += f.effect.ms;
       }
       // before-response faults: the response is altered on its way back.
-      for (const af of this.matchFaults('before-response', tool, args)) {
+      for (const af of this.matchFaults('before-response', tool, args, requestId)) {
         const f = af.fault;
         const e = f.effect;
         const fe = this.emit({ ...base, kind: 'fault.injected', origin: 'fault', summary: `Fault ${f.id} before response: ${f.description}`, data: { faultId: f.id, point: f.point, effect: e as unknown as Json }, causes });

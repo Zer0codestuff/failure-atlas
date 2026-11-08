@@ -102,6 +102,8 @@ export interface Fault {
     /** 1-based occurrences among matching calls. Absent means every matching call. */
     occurrences?: number[];
     triggerId?: string;
+    /** Exact request identity as assigned by the runner ("tool#n"). Deterministic for a pinned scenario prefix. */
+    requestId?: string;
     /** For clock faults: virtual time in milliseconds. */
     atMs?: number;
     /** Only calls issued strictly before this virtual time match (models a time window such as a rate limit). */
