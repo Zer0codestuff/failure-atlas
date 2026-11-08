@@ -19,6 +19,8 @@ npm run build          # web app in dist/web, single-file CLI in dist/cli/fa.mjs
 
 The UI opens directly into the duplicate-charge scenario: the payment tool commits a charge, the response is lost, and a retry without an idempotency key charges the customer twice. The failed check links to the two `state.changed` events that prove it, and the Compare tab shows the first divergence from the corrected run.
 
+The interface follows the visual language of [gabrielemonni.me](https://gabrielemonni.me): a scenario rail grouped by mechanism with a status dot per scenario, the scenario and its run configuration side by side, then a verdict card. The verdict names the outcome in words (`FAILING`, `PASSING`, `EXECUTION ERROR` or `NOT CHECKED`), the first failed check and what it violated, lists every check as a chip, and offers the next step: jump to the evidence, or rerun the same faults with the corrected policy, which keeps the failing run as the comparison baseline and opens Compare. Under it, an ASCII strip shows the whole run with one cell per recorded event (or per bucket of events on long traces); cells that are evidence of a failed check are red and the first divergence is marked. The workspace below has indexed views (`[1]` to `[8]`) beside a persistent event inspector. On phones one pane is shown at a time.
+
 ## Three execution modes
 
 | Mode | What it is | Reproducible | Can fork or bundle |
@@ -100,7 +102,7 @@ scripts/           screenshots, UI interaction checks, browser benchmark, clean-
 | Types | `npm run typecheck` | clean |
 | Scenario matrix (56 configurations) | `npm run fa -- matrix` | all reproducible; 19 of 28 faulty configurations fail as expected; the 2 corrected configurations with a failing check (persistent outage, upstream contract violation) are expected by the independent spec |
 | Clean-environment bundle verify | `npm run check:clean-env` | both bundles reproduce with only `fa.mjs` and Node in an empty directory; a tampered bundle is rejected |
-| UI interaction checks | `npm run build:web && npm run ui-check` | 45 of 45 (keyboard, reduced motion, loading, import errors, fault injection, fork, no overflow at 1440/1024/768/390) |
+| UI interaction checks | `npm run build:web && npm run ui-check` | 50 of 50 (keyboard, reduced motion, loading, import errors, verdict, check chips, trace strip, corrected-policy flow, fault injection, fork, no overflow at 1440/1024/768/390) |
 | Screenshots | `npm run screenshots` | `docs/screenshots/` |
 | Performance (10,338-event trace) | `npm run bench`, `npm run bench:browser` | see [docs/PERFORMANCE.md](docs/PERFORMANCE.md) |
 
@@ -116,6 +118,7 @@ Captured from the running app by `npm run screenshots` and `npm run ui-check`:
 | [1440 px: dependency graph](docs/screenshots/desktop-1440-graph.png) | [1024 px](docs/screenshots/laptop-1024-timeline.png) |
 | [768 px](docs/screenshots/tablet-768-timeline.png) | [390 px: timeline](docs/screenshots/phone-390-timeline.png) and [inspector](docs/screenshots/phone-390-inspector.png) |
 | [Fork from a checkpoint, compared with its parent](docs/screenshots/state-fork-compare.png) | [Import validation error](docs/screenshots/state-import-error.png) |
+| [Corrected policy run, compared with the failing run](docs/screenshots/state-corrected-compare.png) | [Fault composer next to the selected request](docs/screenshots/state-fault-composer.png) |
 
 ## Limitations
 

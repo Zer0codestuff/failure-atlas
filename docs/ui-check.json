@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-08T13:33:36.923Z",
+  "generatedAt": "2026-11-08T17:46:32.624Z",
   "results": [
     {
       "name": "reduced motion disables paced delivery",
@@ -52,6 +52,31 @@
       "detail": ""
     },
     {
+      "name": "verdict names the failing check",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "verdict check chips show every check with a symbol",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "trace strip cells select their event in the timeline",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "corrected policy run passes and is selected",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "corrected run opens the comparison against the failing run",
+      "ok": true,
+      "detail": ""
+    },
+    {
       "name": "injected fault produces a new custom run",
       "ok": true,
       "detail": "sim-d5d83fa1645e324f · status completed · 22 events · Retry without idempotency key · Custom: drop-response after the tool commits its side effect for payments.charge#1 + 1 preset fault(s)"
@@ -59,7 +84,7 @@
     {
       "name": "fork verifies the replayed prefix",
       "ok": true,
-      "detail": "Forked at before-charge: the replayed prefix matched the parent (hash 18e72314621f). The parent run is unchanged. dismiss"
+      "detail": "Forked at before-charge: the replayed prefix matched the parent (hash 18e72314621f). The parent run is unchanged.dismiss"
     },
     {
       "name": "forked run passes its checks",
