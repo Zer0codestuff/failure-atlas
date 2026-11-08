@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Trace } from '../../engine/types';
 import type { ExportPreview } from '../protocol';
+import { PanelHead } from './PanelHead';
 import { download } from './JsonView';
 
 interface Props {
@@ -16,7 +17,8 @@ export function Export({ trace, preview, error, onPreview }: Props) {
   if (!trace) return <p className="empty">No run yet.</p>;
   if (trace.mode !== 'simulation') {
     return (
-      <div className="export">
+      <div className="export panel-section">
+        <PanelHead title="Export" />
         <p className="notice">Regression bundles need a deterministic simulation run. This {trace.mode} trace can be downloaded as recorded, but it cannot be re-executed.</p>
         <button className="btn" onClick={() => download(`${trace.id}.trace.json`, JSON.stringify(trace, null, 2))}>download trace JSON</button>
       </div>
@@ -24,8 +26,9 @@ export function Export({ trace, preview, error, onPreview }: Props) {
   }
   const userPaths = paths.split(',').map((p) => p.trim()).filter(Boolean);
   return (
-    <div className="export">
-      <p className="small">A regression bundle carries the scenario, contracts, fixtures, policy, fault plan, seed, engine and schema versions, expected hashes and assertion outcomes. <code>failure-atlas verify bundle.json</code> re-executes it and exits non-zero on any difference.</p>
+    <div className="export panel-section">
+      <PanelHead title="Regression bundle" />
+      <p className="panel-note">A regression bundle carries the scenario, contracts, fixtures, policy, fault plan, seed, engine and schema versions, expected hashes and assertion outcomes. <code>failure-atlas verify bundle.json</code> re-executes it and exits non-zero on any difference.</p>
       {trace.fork && <p className="notice">Forked runs cannot be bundled yet; bundles describe one full run configuration. Rerun the fork's policy and fault plan from the start, then export.</p>}
       <div className="form">
         <label className="inline"><input type="checkbox" checked={includeTrace} onChange={(e) => setIncludeTrace(e.target.checked)} /> include a copy of the source trace</label>

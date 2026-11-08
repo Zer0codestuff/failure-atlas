@@ -27,6 +27,7 @@ export function Inspector({ trace, event, scenario, assertions, onSelect, onInje
   if (!trace || !event) {
     return (
       <aside className="inspector" aria-label="Event inspector">
+        <p className="eyebrow">inspector</p>
         <p className="empty">Select an event to see what it means, what caused it, and which checks rely on it.</p>
       </aside>
     );
@@ -37,7 +38,8 @@ export function Inspector({ trace, event, scenario, assertions, onSelect, onInje
   const canFork = simulation && event.kind === 'checkpoint' && !!scenario && scenario.checkpoints.includes(String((event.data as any)?.id)) && !trace.fork;
   return (
     <aside className="inspector" aria-label="Event inspector">
-      {onBack && <button className="btn ghost back" onClick={onBack}>&lt;- timeline</button>}
+      {onBack && <button className="btn ghost back" onClick={onBack}><span aria-hidden="true">←</span> back</button>}
+      <p className="eyebrow">inspector · event {event.seq} of {trace.events.length}</p>
       <header className="insp-head">
         <span className={`insp-sym tone-${g.tone}`} aria-hidden="true">{g.sym}</span>
         <div>

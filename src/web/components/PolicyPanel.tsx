@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { validate } from '../../engine/jsonschema';
 import type { Json, Policy } from '../../engine/types';
 import type { WorkflowDefinition } from '../../engine/workflow';
+import { PanelHead } from './PanelHead';
 
 /** Edit policy values with per-field documentation. Invalid values are rejected before a run starts. */
 export function PolicyPanel({ workflow, policy, onApply, busy }: { workflow: WorkflowDefinition; policy: Policy; onApply: (p: Policy) => void; busy: boolean }) {
@@ -21,12 +22,12 @@ export function PolicyPanel({ workflow, policy, onApply, busy }: { workflow: Wor
   }
   const issues = parseErrors.length ? parseErrors : validate(workflow.policySchema, parsed).map((i) => `${i.path} ${i.message}`);
   return (
-    <div className="policy">
-      <p className="small">{workflow.title}: {workflow.description}</p>
+    <div className="policy panel-section">
+      <PanelHead title="Policy" note={<><strong>{workflow.title}.</strong> {workflow.description}</>} />
       <div className="policy-grid">
         {Object.keys(props).map((k) => (
           <label key={k} className="policy-field">
-            <span className="mono">{k}</span>
+            <span className="field-label">{k}</span>
             {props[k].type === 'boolean' ? (
               <select className="input" value={draft[k] ?? ''} onChange={(e) => setDraft({ ...draft, [k]: e.target.value })}><option value="true">true</option><option value="false">false</option></select>
             ) : props[k].enum ? (
