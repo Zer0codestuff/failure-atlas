@@ -207,6 +207,7 @@ class Runner {
       ...(this.opts.wallClock ? { wt: new Date().toISOString() } : {}),
       ...e,
       data: e.data === undefined ? null : cloneJson(e.data),
+      ...(e.causes ? { causes: [...new Set(e.causes)].filter((c) => c < this.events.length + 1).sort((x, y) => x - y) } : {}),
     };
     this.events.push(event);
     this.opts.onEvent?.(event);

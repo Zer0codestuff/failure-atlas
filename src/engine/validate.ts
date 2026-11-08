@@ -120,7 +120,7 @@ export function validateScenario(raw: unknown, workflows: (id: string, version: 
   for (const k of ['id', 'version', 'title', 'mechanism', 'summary'] as const) need(typeof s[k] === 'string' && s[k].length > 0, `${k} must be a non-empty string`);
   need(isObj(s.workflow), 'workflow must name a registered workflow');
   const wf = isObj(s.workflow) ? workflows(s.workflow.id, s.workflow.version) : undefined;
-  need(Boolean(wf), `workflow ${s.workflow?.id}@${s.workflow?.version} is not registered in this build. Imported scenarios cannot supply their own code.`);
+  if (!wf) throw new ImportError('INVALID', `Workflow ${s.workflow?.id}@${s.workflow?.version} is not registered in this build. Imported scenarios cannot supply their own code.`, [`unregistered workflow ${s.workflow?.id}@${s.workflow?.version}`]);
   need(Array.isArray(s.tools) && Array.isArray(s.fixtures) && Array.isArray(s.triggers) && Array.isArray(s.policies) && Array.isArray(s.faultPresets) && Array.isArray(s.assertions), 'tools, fixtures, triggers, policies, faultPresets and assertions must be arrays');
   need(Array.isArray(s.allowedTools) && s.allowedTools.every((t) => typeof t === 'string'), 'allowedTools must be a list of tool names');
   need(isObj(s.limits) && Number.isInteger(s.limits.maxSteps) && s.limits.maxSteps > 0 && s.limits.maxSteps <= 1_000_000 && typeof s.limits.maxVirtualMs === 'number', 'limits.maxSteps (1..1000000) and limits.maxVirtualMs are required');
